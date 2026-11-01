@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Train the submission model (cli/submission/model.py) on the course split.
 
-Objective: negative SI-SNR on aligned random crops (the DCCRN paper's loss).
+Objective: negative SI-SNR on aligned random crops (the DCCRN paper's loss),
+optionally plus a power-law compressed spectral loss (--loss sisnr+comp).
 After every epoch the whole dev split is enhanced one utterance at a time
 through model.enhance (the exact submission path) and scored with the pinned
 PESQ-WB / STOI / SI-SDR metrics and the course composite A(D).
 
 Model-selection rule: keep the epoch with the highest dev A(D) on noisy
-inputs. The learning rate halves when dev SI-SNR loss stops improving;
+inputs. The learning rate halves when the run's own objective on dev stops
+improving (for --loss sisnr, dev SI-SNR loss);
 training stops early when dev A(D) has not improved for --early-stop epochs.
 """
 
@@ -35,6 +37,11 @@ from metrics import quality, si_sdr  # noqa: E402
 
 DATA_ROOT = Path("/projectnb/ec523kb/projects/DeNoise/16khz")
 SAMPLE_RATE = 16_000
+# lambda for --loss sisnr+comp. At initialisation, on 16 real 4 s training
+# crops, the SI-SNR gradient norm is ~535x that of the compressed loss with
+# c=0.3 (~100x with c=1), so lambda=500 starts the two terms at about equal
+# gradient strength. Use --comp-weight 100 for the c=1 ablation to match.
+COMP_WEIGHT = 500.0
 
 
 def load_module(path: Path):
@@ -83,6 +90,40 @@ def neg_si_snr(estimate: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) 
     return -10 * torch.log10(ratio + eps).mean()
 
 
+def compressed_spectral_loss(estimate, target, stft, power, alpha, eps=1e-8):
+    """Power-law compressed magnitude + complex MSE (Braun & Tashev, 2021).
+
+    (1-alpha) * mean| |S^|^c - |S|^c |^2 + alpha * mean| |S^|^c e^{j<S^} - |S|^c e^{j<S} |^2.
+    power=1 removes the compression (the mechanism ablation).
+    """
+    def compress(spec):
+        mag = (spec.real ** 2 + spec.imag ** 2 + eps).sqrt()
+        scale = mag ** (power - 1)
+        return mag ** power, spec.real * scale, spec.imag * scale
+
+    em, er, ei = compress(stft(estimate))
+    rm, rr, ri = compress(stft(target))
+    magnitude = (em - rm).pow(2).mean()
+    complex_ = ((er - rr).pow(2) + (ei - ri).pow(2)).mean()
+    return (1 - alpha) * magnitude + alpha * complex_
+
+
+def make_objective(args, model):
+    """Training objective; returns (total, {term: value}) for logging."""
+    def stft(x):
+        return torch.stft(x, model.n_fft, model.hop, model.win_len, model.window,
+                          center=True, return_complex=True)
+
+    def objective(estimate, target):
+        sisnr = neg_si_snr(estimate, target)
+        if args.loss == "sisnr":
+            return sisnr, {"sisnr": sisnr.item()}
+        comp = compressed_spectral_loss(estimate, target, stft, args.comp_power, args.comp_alpha)
+        return sisnr + args.comp_weight * comp, {"sisnr": sisnr.item(), "comp": comp.item()}
+
+    return objective
+
+
 def score_one(args):
     """PESQ-WB, STOI, SI-SDR for one utterance (runs in a worker process)."""
     clean, enhanced = args
@@ -98,14 +139,16 @@ def score_one(args):
 
 
 @torch.no_grad()
-def evaluate(model, clean, noisy, device, pool):
+def evaluate(model, clean, noisy, device, pool, objective):
     model.eval()
-    outputs, losses = [], []
+    outputs, losses, terms = [], [], []
     for c, n in zip(clean, noisy):
         x = torch.from_numpy(n / np.float32(32768.0)).view(1, -1).to(device)
         y = torch.from_numpy(c / np.float32(32768.0)).view(1, -1).to(device)
         out = model.enhance(x, SAMPLE_RATE)
-        losses.append(neg_si_snr(out, y).item())
+        loss, parts = objective(out, y)
+        losses.append(loss.item())
+        terms.append(parts)
         outputs.append(out.float().cpu().numpy().reshape(-1))
     model.train()
     refs = [c.astype(np.float32) / 32768.0 for c in clean]
@@ -114,7 +157,9 @@ def evaluate(model, clean, noisy, device, pool):
     peaks = np.array([np.abs(o).max() for o in outputs])
     result = quality(p, s, r)
     result.update(
-        loss=float(np.mean(losses)), pesq_failures=int(sum(failed)),
+        loss=float(np.mean(losses)),
+        **{k: float(np.mean([t[k] for t in terms])) for k in terms[0]},
+        pesq_failures=int(sum(failed)),
         max_peak=float(peaks.max()), over_unit_peak=int((peaks > 1.0).sum()),
     )
     return result
@@ -140,6 +185,10 @@ def main() -> None:
     ap.add_argument("--lr-patience", type=int, default=2)
     ap.add_argument("--early-stop", type=int, default=10)
     ap.add_argument("--clip-grad", type=float, default=5.0)
+    ap.add_argument("--loss", choices=["sisnr", "sisnr+comp"], default="sisnr")
+    ap.add_argument("--comp-power", type=float, default=0.3, help="compression exponent c")
+    ap.add_argument("--comp-alpha", type=float, default=0.3, help="weight of the complex term")
+    ap.add_argument("--comp-weight", type=float, default=COMP_WEIGHT, help="lambda")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--workers", type=int, default=int(os.environ.get("NSLOTS", 4)))
     ap.add_argument("--limit", type=int, default=0, help="debug: use only N utterances per split")
@@ -153,6 +202,7 @@ def main() -> None:
     module = load_module(args.source)
     model = module.build_enhancer(SAMPLE_RATE).to(device)
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    objective = make_objective(args, model)
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optim, mode="min", factor=0.5, patience=args.lr_patience)
@@ -194,21 +244,22 @@ def main() -> None:
             if device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats(device)
             model.train()
-            losses = []
+            losses, terms = [], []
             for x, y in batches(train_clean, train_noisy, args.batch_size, crop, rng):
                 x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
-                loss = neg_si_snr(model(x), y)
+                loss, parts = objective(model(x), y)
                 optim.zero_grad(set_to_none=True)
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
                 if torch.isfinite(grad_norm):
                     optim.step()
                 losses.append(loss.item())
+                terms.append(parts)
             train_seconds = time.time() - t_epoch
             peak_gib = (torch.cuda.max_memory_allocated(device) / 2**30
                         if device.type == "cuda" else 0.0)
 
-            dev = evaluate(model, dev_clean, dev_noisy, device, pool)
+            dev = evaluate(model, dev_clean, dev_noisy, device, pool, objective)
             sched.step(dev["loss"])
             improved = dev["quality"] > best
             if improved:
@@ -220,6 +271,7 @@ def main() -> None:
 
             record = {
                 "epoch": epoch, "train_loss": float(np.mean(losses)),
+                **{f"train_{k}": float(np.mean([t[k] for t in terms])) for k in terms[0]},
                 "lr": optim.param_groups[0]["lr"], "train_seconds": train_seconds,
                 "epoch_seconds": time.time() - t_epoch, "peak_train_gib": peak_gib,
                 **{f"dev_{k}": v for k, v in dev.items()}, "best": improved,
