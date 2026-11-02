@@ -23,7 +23,9 @@ SEED=${SEED:-0}
 module load miniconda academic-ml/spring-2026
 conda activate spring-2026-pyt
 source .venv/bin/activate
+set -u
 
+export PYTHONUNBUFFERED=1
 echo "host $(hostname)  job ${JOB_ID:-local}  $(date)"
 nvidia-smi --query-gpu=name,memory.total --format=csv
 python train/train.py --run "runs/$RUN" --seed "$SEED" --workers "${NSLOTS:-8}" "$@"
