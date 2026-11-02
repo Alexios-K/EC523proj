@@ -1,0 +1,12 @@
+# Environment used for training and dev evaluation (Python 3.12.11).
+# On BU SCC this is the academic-ml/spring-2026 "spring-2026-pyt" conda env
+# plus pesq and pystoi (see README, "Environment").
+#
+# Inference alone does not need this file: it runs in the course default
+# environment, cli/requirements.txt (torch 2.6.0), and was verified there.
+torch==2.9.1
+numpy==2.2.6
+scipy==1.16.0
+safetensors==0.7.0
+pesq==0.0.4
+pystoi==0.4.1

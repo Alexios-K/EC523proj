@@ -14,9 +14,10 @@ python enhance.py --checkpoint demo/model.safetensors \
 python -m unittest discover -s tests -v
 ```
 
-The generated signals are synthetic tones, not speech. The included spectral
-gate is untrained and close to an identity transform. Neither is a baseline
-result.
+The generated signals are synthetic tones, not speech, and `make_demo.py`
+writes untrained weights. Neither is a result. The trained submission is
+`submission/model.safetensors`; see the top-level README, and `infer.py` for
+single-file or folder inference.
 
 ## Official inference
 
