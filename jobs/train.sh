@@ -16,7 +16,7 @@
 #$ -cwd
 #$ -o runs/
 
-set -euo pipefail
+set -eo pipefail  # not -u: conda activation scripts read unset variables
 RUN=${RUN:?set RUN, e.g. qsub -v RUN=dccrn_seed0 jobs/train.sh}
 SEED=${SEED:-0}
 

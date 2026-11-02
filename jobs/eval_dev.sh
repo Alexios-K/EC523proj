@@ -14,7 +14,7 @@
 #$ -cwd
 #$ -o runs/
 
-set -euo pipefail
+set -eo pipefail  # not -u: conda activation scripts read unset variables
 RUN=${RUN:?set RUN}
 ROOT=$PWD
 OUT=$ROOT/runs/$RUN/dev_eval

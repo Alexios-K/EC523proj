@@ -165,6 +165,14 @@ def evaluate(model, clean, noisy, device, pool, objective):
     return result
 
 
+def atomic_write(path: Path, write) -> None:
+    """write(tmp_path), then rename over path, so a crash (quota, timeout)
+    mid-write leaves the previous file intact."""
+    tmp = path.with_name(path.name + ".tmp")
+    write(tmp)
+    os.replace(tmp, path)
+
+
 def git_commit() -> str:
     try:
         return subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"],
@@ -264,8 +272,8 @@ def main() -> None:
             improved = dev["quality"] > best
             if improved:
                 best, stale = dev["quality"], 0
-                save_file({k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()},
-                          str(args.run / "model.safetensors"))
+                weights = {k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()}
+                atomic_write(args.run / "model.safetensors", lambda p: save_file(weights, str(p)))
             else:
                 stale += 1
 
@@ -277,19 +285,21 @@ def main() -> None:
                 **{f"dev_{k}": v for k, v in dev.items()}, "best": improved,
             }
             history.append(record)
-            with (args.run / "history.jsonl").open("a") as f:
-                f.write(json.dumps(record) + "\n")
+            # Rewritten from the checkpointed history, so a resumed epoch is never duplicated.
+            atomic_write(args.run / "history.jsonl", lambda p: p.write_text(
+                "".join(json.dumps(h) + "\n" for h in history)))
             print(f"epoch {epoch:3d}  train {record['train_loss']:7.3f}  dev {dev['loss']:7.3f}  "
                   f"PESQ {dev['pesq']:.3f}  STOI {dev['stoi']:.4f}  SI-SDR {dev['si_sdr']:6.2f}  "
                   f"A {dev['quality']:.4f}{' *' if improved else '  '}  lr {record['lr']:.1e}  "
                   f"{record['epoch_seconds']:.0f}s  {peak_gib:.1f} GiB", flush=True)
 
-            torch.save({
+            state = {
                 "model": model.state_dict(), "optim": optim.state_dict(),
                 "sched": sched.state_dict(), "rng": rng.bit_generator.state,
                 "torch_rng": torch.get_rng_state(), "epoch": epoch, "best": best,
                 "stale": stale, "history": history,
-            }, resume)
+            }
+            atomic_write(resume, lambda p: torch.save(state, p))
             if stale >= args.early_stop:
                 print(f"early stop: no dev A improvement for {stale} epochs", flush=True)
                 break
