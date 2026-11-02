@@ -232,7 +232,7 @@ def main() -> None:
         optim.load_state_dict(state["optim"])
         sched.load_state_dict(state["sched"])
         rng.bit_generator.state = state["rng"]
-        torch.set_rng_state(state["torch_rng"])
+        torch.set_rng_state(state["torch_rng"].cpu())
         start_epoch, best, stale, history = (state["epoch"] + 1, state["best"],
                                              state["stale"], state["history"])
         print(f"resumed from epoch {state['epoch']} (best dev A = {best:.4f})", flush=True)
