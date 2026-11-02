@@ -40,7 +40,7 @@ python evaluate.py --clean ../data/dev/clean --enhanced "$OUT/enhanced_noisy" \
 python evaluate.py --clean ../data/dev/clean --enhanced "$OUT/enhanced_clean" \
     --report "$OUT/clean_report.json"
 
-python -"$NOISY_REPORT" "$OUT/noisy_report.json" "$OUT/clean_report.json" <<'EOF'
+python - "$NOISY_REPORT" "$OUT/noisy_report.json" "$OUT/clean_report.json" <<'EOF'
 import json, sys
 names = ["noisy input", "model (noisy in)", "model (clean in)"]
 print(f"{'':18s} {'PESQ':>6s} {'STOI':>7s} {'SI-SDR':>7s} {'A(D)':>7s}")
