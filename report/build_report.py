@@ -3,12 +3,13 @@
 
 Lays the Markdown out like the course template (two columns, Arial, title
 block across the top) and prints it to PDF with headless Chrome. Figures
-come from report/make_figures.py; run that first.
+come from report/make_figures.py; run that first. Inline math written as
+$...$ is converted to MathML, so no network or LaTeX install is needed.
 
   python report/build_report.py                  # writes report/midway_report.pdf
   python report/build_report.py --chrome "C:/Program Files/Google/Chrome/Application/chrome.exe"
 
-Needs: pip install markdown, and Google Chrome or Chromium.
+Needs: pip install markdown latex2mathml, and Google Chrome or Chromium.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import tempfile
 from pathlib import Path
 
 import markdown
+from latex2mathml.converter import convert as latex_to_mathml
 
 HERE = Path(__file__).resolve().parent
 CHROME_PATHS = [
@@ -55,6 +57,7 @@ th, td { border-top: 0.5pt solid #000; border-bottom: 0.5pt solid #000; padding:
 th:first-child, td:first-child { text-align: left; }
 th { font-weight: bold; }
 p:has(> em:only-child) { font-size: 8.6pt; text-align: center; }
+math { font-size: 1.05em; }
 """
 
 
@@ -81,6 +84,16 @@ def figures(body: str, fig_dir: Path) -> str:
     return re.sub(r"<!--\s*figure:(\S+)\s*\n(.*?)-->", replace, body, flags=re.S)
 
 
+def math(body: str) -> tuple[str, list[str]]:
+    """Swap each $...$ for a token Markdown leaves alone; return the MathML for each."""
+    pieces = []
+
+    def replace(m: re.Match) -> str:
+        pieces.append(latex_to_mathml(m.group(1)))
+        return f"MATHTOKEN{len(pieces) - 1}X"
+    return re.sub(r"(?<!\\)\$(.+?)(?<!\\)\$", replace, body), pieces
+
+
 def find_chrome(given: str | None) -> str:
     for candidate in ([given] if given else CHROME_PATHS):
         found = shutil.which(candidate) or (candidate if Path(candidate).exists() else None)
@@ -99,7 +112,9 @@ def main() -> None:
 
     meta, body = front_matter(args.source.read_text(encoding="utf-8"))
     body = re.sub(r"<!--\s*table\d*\s*-->", "", figures(body, args.figures.resolve()))
+    body, pieces = math(body)
     content = markdown.markdown(body, extensions=["tables", "sane_lists"])
+    content = re.sub(r"MATHTOKEN(\d+)X", lambda m: pieces[int(m.group(1))], content)
     page = f"""<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head>
 <body><div class="header">{html.escape(meta.get('header', ''))}</div>
 <h1>{html.escape(meta.get('title', ''))}</h1>

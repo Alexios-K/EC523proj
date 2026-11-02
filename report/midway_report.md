@@ -2,7 +2,7 @@
 header: Deep Learning Fall 2026, Midway Report
 title: Does a Compressed Spectral Loss Help DCCRN Enhance Speech?
 authors: Bharath Srividhya, Jason Redick, Ioannis Kontothanassis
-emails: "{TODO_EMAILS}@bu.edu"
+emails: "bksri27@bu.edu, jredick@bu.edu, alexiosk@bu.edu"
 ---
 
 <!-- figure:fig1_method.png
@@ -11,23 +11,23 @@ Figure 1. DCCRN pipeline. The network and data stay the same as the baseline. Ou
 
 ## 1. Task and Hypothesis
 
-Our task is single channel speech enhancement. The input is a noisy 16 kHz recording and the output is an estimate of the clean speech with the same length. The baseline is DCCRN-E [1], a complex convolutional recurrent network trained with the SI-SNR loss. SI-SNR rewards waveform accuracy. It does not directly reward the spectral detail that perceptual metrics like PESQ care about.
+This project focuses on single channel speech enhancement. The model takes a noisy 16 kHz audio recording and outputs an estimated clean version of the same length. Our baseline is DCCRN-E [1], a complex convolutional recurrent network trained with SI-SNR loss. While SI-SNR improves waveform accuracy, it ignores the finer spectral details that perceptual metrics like PESQ measure.
 
-Our single change is the loss. We add a power law compressed spectral loss [2] to SI-SNR. Compressing magnitudes with an exponent c < 1 gives quiet time frequency bins more weight than plain MSE does. Our hypothesis is that this improves PESQ and STOI without hurting SI-SDR. We test c = 0.3 and an ablation with c = 1. The c = 1 run adds the same kind of spectral term with no compression, so it isolates the compression itself.
+Our only change is the loss function. We add a power law compressed spectral loss [2] to the SI-SNR loss. Compressing magnitudes with an exponent $c < 1$ gives quiet time frequency bins more weight than a standard MSE loss would. We hypothesize that this will improve PESQ and STOI scores without hurting SI-SDR. We tested $c = 0.3$, alongside a $c = 1$ ablation run. The $c = 1$ run adds the spectral term without any compression, allowing us to isolate the specific impact of the compression itself.
 
 ## 2. Method
 
-Figure 1 shows the pipeline. We follow the DCCRN-E configuration and the authors' reference code. The STFT uses a 400 sample sqrt Hann window, a 100 sample hop and a 512 point FFT. Six complex conv layers (32, 64, 128, 256, 256, 256 channels) feed a two layer complex LSTM and a mirrored complex decoder with skip connections. The E mask applies a tanh bounded magnitude and a phase rotation to the noisy spectrum. The model is causal and has 3.67M parameters.
+Figure 1 illustrates our pipeline. We use the original DCCRN-E configuration and the authors' reference code. The STFT uses a 400 sample square root Hann window, a 100 sample hop size, and a 512 point FFT. The causal model has 3.67M parameters. It consists of six complex convolutional layers (32, 64, 128, 256, 256, and 256 channels) that feed into a two layer complex LSTM and a mirrored complex decoder with skip connections. The final mask limits the magnitude using tanh and applies a phase rotation to the noisy input.
 
-The proposed loss is L = L<sub>SI-SNR</sub> + λ L<sub>comp</sub>(c). L<sub>comp</sub> mixes a compressed magnitude MSE (weight 0.7) and a compressed complex MSE (weight 0.3) [2]. We set λ = 500 for c = 0.3 and λ = 100 for c = 1. Each value gives the spectral term about the same gradient norm as SI-SNR at initialization.
+The proposed loss is $L = L_{\text{SI-SNR}} + \lambda L_{\text{comp}}(c)$. The compression term $L_{\text{comp}}$ combines a compressed magnitude MSE (0.7 weight) and a compressed complex MSE (0.3 weight) [2]. We set $\lambda = 500$ for $c = 0.3$ and $\lambda = 100$ for $c = 1$. This ensures the spectral term has roughly the same initial gradient norm as the SI-SNR loss.
 
-All three systems use the same training recipe. We use Adam at learning rate 1e-3, batch 16, aligned 4 s random crops and gradient clipping at 5. The learning rate halves after 2 epochs with no dev improvement. We keep the epoch with the best dev A(D) and stop after 10 epochs with no improvement.
+All three systems share the same training recipe. We use the Adam optimizer with a 1e-3 learning rate, a batch size of 16, aligned 4 second random crops, and gradient clipping at 5. If the dev loss does not improve for two epochs, the learning rate halves. Training stops early after 10 epochs without improvement in dev A(D), and we keep the model from the best dev epoch.
 
 ## 3. Data and Metrics
 
-We use VoiceBank-DEMAND [3] at 16 kHz, 11,572 noisy and clean pairs. We hold out two speakers for dev, p226 (male) and p230 (female), which gives 745 dev and 10,827 train utterances. Dev has 10 noise types at 0, 5, 10 and 15 dB SNR. The noise types and SNRs also appear in training, so dev measures unseen speakers only.
+We use the 16 kHz VoiceBank-DEMAND dataset [3], which contains 11,572 noisy and clean audio pairs. We reserve two speakers for the dev set: p226 (male) and p230 (female). This splits the data into 10,827 training files and 745 dev files. The dev set features 10 noise types at 0, 5, 10, and 15 dB SNR. Since these exact noise types and SNR levels also exist in the training set, the dev set only measures performance on unseen speakers.
 
-We report PESQ, STOI and SI-SDR, and the course composite A(D), which averages normalized PESQ, STOI and SI-SDR with weights 0.4, 0.3 and 0.3. The dev score is 100 (0.85 A(noisy) + 0.15 A(clean input)), the leaderboard formula applied to dev. All scores come from the official enhance.py and evaluate.py chain.
+We track PESQ, STOI, and SI-SDR, as well as a composite score called A(D). A(D) is a weighted average of normalized PESQ (0.4), STOI (0.3), and SI-SDR (0.3). The final dev score is out of 100, calculated as $100 \times (0.85\,A(\text{noisy}) + 0.15\,A(\text{clean input}))$, following the official leaderboard formula. All scores are generated using the official enhance.py and evaluate.py scripts.
 
 ## 4. Baseline and Initial Results
 
@@ -43,13 +43,17 @@ Table 1 gives dev results. Each system is one training seed.
 
 *Table 1. Dev results, 745 utterances, one seed each. SI-SDR in dB. "A clean" scores the model run on clean input.*
 
-We compare each system to DCCRN on the same utterances with a paired bootstrap over utterance IDs (10,000 resamples, 95% intervals). The c = 0.3 model raises the dev score by +3.03 [+2.88, +3.19] and improves A(D) on 92% of utterances. PESQ rises by +0.266 [+0.252, +0.281] and STOI by +0.0116 [+0.0103, +0.0129]. SI-SDR does not change: −0.02 [−0.05, +0.01] dB. The c = 1 ablation gains only +0.25 [+0.15, +0.34] in score and improves 55% of utterances. So most of the gain comes with compression, not from adding a spectral term alone. These intervals cover utterance sampling only. They say nothing about seed to seed variation.
+We compared each system to the DCCRN baseline using a paired bootstrap test over the 745 dev files (10,000 resamples, 95% confidence intervals). The $c = 0.3$ model improves the overall dev score by +3.03 [+2.88, +3.19] and beats the baseline on 92% of the files. PESQ increases by +0.266 [+0.252, +0.281] and STOI by +0.0116 [+0.0103, +0.0129], while the change in SI-SDR is not significant: −0.02 [−0.05, +0.01] dB.
+
+The $c = 1$ ablation only improves the score by +0.25 [+0.15, +0.34], outperforming the baseline on just 55% of files. This suggests that the performance boost comes from the compression, not just from adding a spectral loss. Note: these intervals only account for utterance sampling variance, not variation between training seeds.
 
 <!-- figure:fig2_snr.png
 Figure 2. Dev A(D) on noisy input by input SNR.
 -->
 
-Figure 2 shows that c = 0.3 beats DCCRN at every SNR. The gain is smallest at 0 dB: +0.024 [+0.021, +0.028] in A(D), against +0.034 to +0.038 at 5 to 15 dB. Figure 3 shows that c = 0.3 helps on all 10 noise types. The c = 1 ablation is mixed. It is worse than DCCRN on car noise (−0.0077 [−0.0113, −0.0044]).
+Figure 2 shows that $c = 0.3$ outperforms the baseline across all SNR levels. The improvement is smallest at the hardest 0 dB level (+0.024 [+0.021, +0.028] in A(D)), compared to gains of +0.034 to +0.038 at the higher SNRs.
+
+Figure 3 shows that $c = 0.3$ improves performance across all 10 noise types. In contrast, the $c = 1$ ablation has mixed results, and performs significantly worse than the baseline on car noise (−0.0077 [−0.0113, −0.0044]).
 
 <!-- figure:fig3_noise.png
 Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootstrap intervals.
@@ -57,11 +61,11 @@ Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootst
 
 ## 5. Metric Checks
 
-- **Data.** All 11,572 pairs pass our checks on sample rate, format, equal length and SNR against the corpus log. Cross correlation finds zero lag for every pair (train/prepare_data.py, data/manifest.csv).
-- **Scoring.** The official runner and evaluator reproduce the scores from our training loop exactly.
-- **Outputs.** On dev, no output peak goes above 1.0 and no PESQ call fails.
-- **Clean input.** Running the model on clean dev speech keeps A(D) at 0.920 (DCCRN) and 0.931 (c = 0.3).
-- **Edge cases.** We ran the submitted checkpoint on 22 synthetic inputs: silence, very quiet audio, a 120 s file, files from 1 to 1,000 samples, and full scale signals (cli/edge_cases.py). Every output keeps the input length, is finite, and is identical across two runs. Three full scale inputs fail the peak check: a hard clipped speech like signal (output peak 1.17), a 1 kHz sine (1.03) and a 200 Hz square wave (1.46). The runner would reject these outputs.
+- **Data validation:** We confirmed all 11,572 files have the correct sample rate, format, length, and SNR matching the corpus log. Cross correlation shows zero alignment lag for all pairs.
+- **Scoring accuracy:** The official evaluation scripts exactly match the scores output by our training loop.
+- **Output range:** On the dev set, no output peak goes above 1.0 and no PESQ computation fails.
+- **Clean input test:** Passing clean speech through the models yields an A(D) score of 0.920 for DCCRN and 0.931 for $c = 0.3$.
+- **Edge cases:** We tested the submitted model on 22 unusual inputs, including silence, extremely quiet audio, a 2 minute file, tiny files of 1 to 1,000 samples, and maximum volume signals. The model kept the original length and produced finite, identical outputs on repeated runs every time. However, three full volume inputs (a heavily clipped speech like signal, a 1 kHz sine wave, and a 200 Hz square wave) produced output peaks above 1.0. The official runner would reject these specific outputs.
 
 ## 6. Resource Use
 
@@ -75,19 +79,19 @@ Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootst
 
 ## 7. Risks
 
-- The DCCRN baseline may have trained for fewer epochs than the other runs, because a disk quota crash interrupted it.
-- Each system has one seed, so we cannot yet separate the method effect from seed variation.
-- We select the best epoch on dev, so dev scores are slightly optimistic.
-- The gain is smallest at 0 dB, the hardest condition.
-- The model has no output limiter, and the rules do not let the runner clip. Loud tonal or clipped inputs can push the output above 1.0 (Section 5).
+- A disk quota crash interrupted the DCCRN baseline, so it may have trained for fewer epochs than the new models.
+- We only ran one seed per system, so we cannot rule out random seed variation yet.
+- Because we kept the best epoch based on the dev set, the dev scores might be slightly optimistic.
+- The model improves the least at 0 dB SNR, which is the most challenging noise condition.
+- The model lacks an output limiter. As noted in Section 5, unusually loud or clipped inputs can push the output above the strict 1.0 peak limit, and the runner rules do not permit clipping.
 
 ## 8. Planned Ablations and Next Steps
 
-1. Train a second seed of DCCRN and c = 0.3 to measure seed variation.
-2. Sweep λ around 500 to check the gain is not tied to one weight.
-3. Listen to the shortlisted utterances where PESQ and SI-SDR disagree and plot their spectrograms. This also covers the largest wins and losses.
-4. Find the input level where full scale inputs start to exceed 1.0, and decide how to handle it within the rules.
-5. If time allows, try c = 0.5 to see how the gain depends on the exponent.
+1. Train a second seed for both the baseline and the $c = 0.3$ model to measure seed variance.
+2. Test different $\lambda$ values around 500 to ensure the improvements are not just tied to a single lucky weight.
+3. Listen to and plot spectrograms for the most extreme successes and failures, focusing closely on files where PESQ and SI-SDR disagree.
+4. Identify the exact input volume that causes the model to output peaks above 1.0, and figure out a way to fix it within the rules.
+5. If time permits, test $c = 0.5$ to see how changing the compression exponent affects the final gain.
 
 ## 9. Contributions
 
@@ -95,7 +99,7 @@ Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootst
 - **Jason Redick:** SCC batch job scripts, checkpoint resume fix, and dev evaluation through the official chain.
 - **Bharath Srividhya:** helped design and debug the model and training code in shared sessions, wrote the figure script (report/make_figures.py) and the edge case test (cli/edge_cases.py), ran the edge case checks, and wrote this report.
 
-**AI use.** We used Claude to help write code for the figure and edge case scripts and to check grammar. We reviewed and ran all of this code ourselves.
+**AI use.** We used Claude, an AI assistant, to help write the figure and edge case scripts, to produce a first draft of this report that we then rewrote in our own words, and to check grammar. We reviewed and ran all of this code ourselves.
 
 ## References
 
