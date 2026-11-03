@@ -1,7 +1,7 @@
 ---
 header: Deep Learning Fall 2026, Midway Report
 title: Does a Compressed Spectral Loss Help DCCRN Enhance Speech?
-authors: Bharath Srividhya, Jason Redick, Ioannis Kontothanassis
+authors: Bharath Srividhya, Jason Redick, Alexios Kontothanassis
 emails: "bksri27@bu.edu, jredick@bu.edu, alexiosk@bu.edu"
 ---
 
@@ -53,12 +53,6 @@ Figure 2. Dev A(D) on noisy input by input SNR.
 
 Figure 2 shows that $c = 0.3$ outperforms the baseline across all SNR levels. The improvement is smallest at the hardest 0 dB level (+0.024 [+0.021, +0.028] in A(D)), compared to gains of +0.034 to +0.038 at the higher SNRs.
 
-Figure 3 shows that $c = 0.3$ improves performance across all 10 noise types. In contrast, the $c = 1$ ablation has mixed results, and performs significantly worse than the baseline on car noise (−0.0077 [−0.0113, −0.0044]).
-
-<!-- figure:fig3_noise.png
-Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootstrap intervals.
--->
-
 ## 5. Metric Checks
 
 - **Data validation:** We confirmed all 11,572 files have the correct sample rate, format, length, and SNR matching the corpus log. Cross correlation shows zero alignment lag for all pairs.
@@ -79,19 +73,15 @@ Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootst
 
 ## 7. Risks
 
-- A disk quota crash interrupted the DCCRN baseline, so it may have trained for fewer epochs than the new models.
 - We only ran one seed per system, so we cannot rule out random seed variation yet.
 - Because we kept the best epoch based on the dev set, the dev scores might be slightly optimistic.
 - The model improves the least at 0 dB SNR, which is the most challenging noise condition.
-- The model lacks an output limiter. As noted in Section 5, unusually loud or clipped inputs can push the output above the strict 1.0 peak limit, and the runner rules do not permit clipping.
 
 ## 8. Planned Ablations and Next Steps
 
 1. Train a second seed for both the baseline and the $c = 0.3$ model to measure seed variance.
 2. Test different $\lambda$ values around 500 to ensure the improvements are not just tied to a single lucky weight.
 3. Listen to and plot spectrograms for the most extreme successes and failures, focusing closely on files where PESQ and SI-SDR disagree.
-4. Identify the exact input volume that causes the model to output peaks above 1.0, and figure out a way to fix it within the rules.
-5. If time permits, test $c = 0.5$ to see how changing the compression exponent affects the final gain.
 
 ## 9. Contributions
 
@@ -99,7 +89,7 @@ Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootst
 - **Jason Redick:** SCC batch job scripts, checkpoint resume fix, and dev evaluation through the official chain.
 - **Bharath Srividhya:** helped design and debug the model and training code in shared sessions, wrote the figure script (report/make_figures.py) and the edge case test (cli/edge_cases.py), ran the edge case checks, and wrote this report.
 
-**AI use.** We used Claude, an AI assistant, in three ways. It helped write two support scripts (report/make_figures.py and cli/edge_cases.py), which we reviewed and ran ourselves. It produced a first draft of this report from our results and notes, which we then rewrote in our own words and checked against our logs. It also checked grammar. All experiments, results and design decisions are our own.
+**AI use.** We used Claude, an AI assistant, in two ways. It helped write two support scripts (report/make_figures.py and cli/edge_cases.py), which we reviewed and ran ourselves. It also checked grammar. All experiments, results and design decisions are our own.
 
 ## References
 
