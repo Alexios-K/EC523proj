@@ -17,7 +17,7 @@ Our only change is the loss function. We add a power law compressed spectral los
 
 ## 2. Method
 
-Figure 1 illustrates our pipeline. We use the original DCCRN-E configuration and the authors' reference code. The STFT uses a 400 sample square root Hann window, a 100 sample hop size, and a 512 point FFT. The causal model has 3.67M parameters. It consists of six complex convolutional layers (32, 64, 128, 256, 256, and 256 channels) that feed into a two layer complex LSTM and a mirrored complex decoder with skip connections. The final mask limits the magnitude using tanh and applies a phase rotation to the noisy input.
+Figure 1 illustrates our pipeline. We use the original DCCRN-E configuration and the authors' reference code. The STFT uses a 400 sample square root Hann window, a 100 sample hop size. The causal model has 3.67M parameters. It consists of six complex convolutional layers that feed into a two layer complex LSTM and a mirrored complex decoder with skip connections. The final mask limits the magnitude using tanh and applies a phase rotation to the noisy input.
 
 The proposed loss is $L = L_{\text{SI-SNR}} + \lambda L_{\text{comp}}(c)$. The compression term $L_{\text{comp}}$ combines a compressed magnitude MSE (0.7 weight) and a compressed complex MSE (0.3 weight) [2]. We set $\lambda = 500$ for $c = 0.3$ and $\lambda = 100$ for $c = 1$. This ensures the spectral term has roughly the same initial gradient norm as the SI-SNR loss.
 
@@ -45,7 +45,7 @@ Table 1 gives dev results. Each system is one training seed.
 
 We compared each system to the DCCRN baseline using a paired bootstrap test over the 745 dev files (10,000 resamples, 95% confidence intervals). The $c = 0.3$ model improves the overall dev score by +3.03 [+2.88, +3.19] and beats the baseline on 92% of the files. PESQ increases by +0.266 [+0.252, +0.281] and STOI by +0.0116 [+0.0103, +0.0129], while the change in SI-SDR is not significant: −0.02 [−0.05, +0.01] dB.
 
-The $c = 1$ ablation only improves the score by +0.25 [+0.15, +0.34], outperforming the baseline on just 55% of files. This suggests that the performance boost comes from the compression, not just from adding a spectral loss. Note: these intervals only account for utterance sampling variance, not variation between training seeds.
+The $c = 1$ ablation only improves the score by +0.25 [+0.15, +0.34], outperforming the baseline on just 55% of files. This suggests that the performance boost comes from the compression, not just from adding a spectral loss. 
 
 <!-- figure:fig2_snr.png
 Figure 2. Dev A(D) on noisy input by input SNR.
@@ -59,17 +59,12 @@ Figure 2 shows that $c = 0.3$ outperforms the baseline across all SNR levels. Th
 - **Scoring accuracy:** The official evaluation scripts exactly match the scores output by our training loop.
 - **Output range:** On the dev set, no output peak goes above 1.0 and no PESQ computation fails.
 - **Clean input test:** Passing clean speech through the models yields an A(D) score of 0.920 for DCCRN and 0.931 for $c = 0.3$.
-- **Edge cases:** We tested the submitted model on 22 unusual inputs, including silence, extremely quiet audio, a 2 minute file, tiny files of 1 to 1,000 samples, and maximum volume signals. The model kept the original length and produced finite, identical outputs on repeated runs every time. However, three full volume inputs (a heavily clipped speech like signal, a 1 kHz sine wave, and a 200 Hz square wave) produced output peaks above 1.0. The official runner would reject these specific outputs.
+- **Edge cases:** We tested the submitted model on 22 unusual inputs, including silence, extremely quiet audio, and maximum volume signals. The model kept the original length and produced finite, identical outputs on repeated runs every time. However, three full volume inputs (a heavily clipped speech like signal, a 1 kHz sine wave, and a 200 Hz square wave) produced output peaks above 1.0. The official runner would reject these specific outputs.
 
 ## 6. Resource Use
 
-| Item | Value |
-|---|---|
-| Parameters | 3,671,053 (limit 15M) |
-| Checkpoint size | 14.7 MB |
-| Peak training memory | 6.6 GiB on one L40S (limit 32 GiB) |
-| Training time | 2.5 to 2.8 GPU hours per run |
-| Real time factor | about 0.006 on L40S, 0.10 on an Apple M2 CPU |
+Parameters: 3,671,053 (limit 15M), Checkpoint size: 14.7 MB,
+Peak training memory: 6.6 GiB on one L40S (limit 32 GiB),Training time: 2.5 to 2.8 GPU hours per run, Real time factor: about 0.006 on L40S
 
 ## 7. Risks
 
