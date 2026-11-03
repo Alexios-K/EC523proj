@@ -99,7 +99,7 @@ Figure 3. Paired change in dev A(D) against DCCRN by noise type, with 95% bootst
 - **Jason Redick:** SCC batch job scripts, checkpoint resume fix, and dev evaluation through the official chain.
 - **Bharath Srividhya:** helped design and debug the model and training code in shared sessions, wrote the figure script (report/make_figures.py) and the edge case test (cli/edge_cases.py), ran the edge case checks, and wrote this report.
 
-**AI use.** We used Claude, an AI assistant, to help write the figure and edge case scripts, to produce a first draft of this report that we then rewrote in our own words, and to check grammar. We reviewed and ran all of this code ourselves.
+**AI use.** We used Claude, an AI assistant, in three ways. It helped write two support scripts (report/make_figures.py and cli/edge_cases.py), which we reviewed and ran ourselves. It produced a first draft of this report from our results and notes, which we then rewrote in our own words and checked against our logs. It also checked grammar. All experiments, results and design decisions are our own.
 
 ## References
 
