@@ -74,13 +74,20 @@ Peak training memory: 6.6 GiB on one L40S (limit 32 GiB),Training time: 2.5 to 2
 
 ## 8. Planned Ablations and Next Steps
 
-1. Train a second seed for both the baseline and the $c = 0.3$ model to measure seed variance.
-2. Test different $\lambda$ values around 500 to ensure the improvements are not just tied to a single lucky weight.
-3. Listen to and plot spectrograms for the most extreme successes and failures, focusing closely on files where PESQ and SI-SDR disagree.
+Table 2 lists what each member has finished and what each member will do next, with dates.
+
+| Member | Completed (by Nov 11) | Planned next step | Dates |
+|---|---|---|---|
+| Alexios Kontothanassis | DCCRN model, training script and compressed loss; most training runs; dev comparison script; submitted checkpoint | Train a second seed for both the baseline and the $c = 0.3$ model to measure seed variance | Nov 12 – Nov 21 |
+| Jason Redick | SCC batch job scripts; checkpoint resume fix; dev evaluation through the official chain | Test different $\lambda$ values around 500 (e.g. 250 and 1000) to check that the gain does not depend on one lucky weight | Nov 14 – Nov 25 |
+| Bharath Srividhya | Model and training code debugging; figure script; edge case test and checks; midway report | Listen to and plot spectrograms for the largest successes and failures, focusing on files where PESQ and SI-SDR disagree | Nov 17 – Nov 28 |
+| All members | | Collect seed and $\lambda$ results, update figures and write the final report | Nov 29 – Dec 8 |
+
+*Table 2. Project timeline.*
 
 ## 9. Contributions
 
-- **Ioannis Kontothanassis:** DCCRN model, training script and the compressed loss, most training runs, the dev comparison script and the submitted checkpoint.
+- **Alexios Kontothanassis:** DCCRN model, training script and the compressed loss, most training runs, the dev comparison script and the submitted checkpoint.
 - **Jason Redick:** SCC batch job scripts, checkpoint resume fix, and dev evaluation through the official chain.
 - **Bharath Srividhya:** helped design and debug the model and training code in shared sessions, wrote the figure script (report/make_figures.py) and the edge case test (cli/edge_cases.py), ran the edge case checks, and wrote this report.
 
